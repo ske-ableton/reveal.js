@@ -20,12 +20,279 @@
 			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
 			document.getElementsByTagName( 'head' )[0].appendChild( link );
 		</script>
+		<style type="text/css">
+			.reveal .noborder {
+				border-style: none;
+				background: rgba(255, 255, 255, 0.0);
+			}
+			.logo {
+				position: fixed;
+				bottom: 10px;
+				left: 10px;
+			}
+			svg rect {
+				fill: #fff;
+			}
+		</style>
 	</head>
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+
+<svg width="112px" height="52px" class="logo">
+    <g>
+        <rect x="0"  width="7" height="52"></rect>
+        <rect x="15" width="7" height="52"></rect>
+        <rect x="30" width="7" height="52"></rect>
+        <rect x="45" width="7" height="52"></rect>
+    </g>
+    <g>
+        <rect x="60" y="0"  width="52" height="7"></rect>
+        <rect x="60" y="15" width="52" height="7"></rect>
+        <rect x="60" y="30" width="52" height="7"></rect>
+        <rect x="60" y="45" width="52" height="7"></rect>
+    </g>
+</svg>
+
+<section>
+	<h2>Integrating a non-Qt Model with QML</h2>
+	<br/><br/>
+	<br/>
+	<h3>Stephen Kelly</h3>
+	<h3>@steveire</h3>
+</section>
+<section>
+	<section><h2>Architecture</h2></section>
+	<section><h2>Big Blob</h2><img class="noborder" src="blob.png"/></section>
+	<section><h2>Model-View</h2><img class="noborder" src="modelview.png"/></section>
+	<section><h2>Model-View-ViewModel</h2><img class="noborder" src="mvvm.png"/></section>
+</section>
+<section>
+	<section><h2>MVVM with QML</h2><img class="noborder" src="mvvm-qml.png"/></section>
+	<section>
+		<h2>API Examples</h2>
+		<table>
+			<tr><th>Model</th><th>Qt&nbsp;ViewModel</th><th>QML&nbsp;View</th></tr>
+			<tr><td>String&nbsp;class</td><td>Q_PROPERTY(QString)</td><td>Text</td></tr>
+			<tr><td>Date&nbsp;class</td><td>Q_PROPERTY(QDateTime)</td><td>Calendar</td></tr>
+			<tr><td>Sequence</td><td>QAbstractItemModel</td><td>ListView</td></tr>
+		</table>
+	</section>
+
+	<section>
+		<h2>API Examples</h2>
+		<table>
+			<tr><th>Model</th><th>Qt&nbsp;ViewModel</th><th>QML&nbsp;View</th></tr>
+			<tr>
+			<td><span class="fragment highlight-green" data-fragment-index="0">Data Object</span></td>
+			<td><span class="fragment highlight-green" data-fragment-index="0">QObject</span></td>
+			<td><span class="fragment highlight-green" data-fragment-index="0">QML Element</span></td>
+			</tr>
+			<tr><td>Operation</td><td>Q_INVOKABLE</td><td>JS function</td></tr>
+		</table>
+	</section>
+	<section>
+		<h2>Claims</h2>
+		<ul>
+			<li>Document structure wants to own <emph>Model</emph> objects</li>
+			<li>Garbage collector wants to own <emph>QML</emph> QObjects</li>
+			<li>QML environment prefers declarative APIs</li>
+		</ul>
+	</section>
+	<section>
+		<h2>ViewModel API requirements</h2>
+		<ul>
+			<li>Reading/writing properties marked with Q_PROPERTY on objects</li>
+			<li>Invoking methods marked with Q_INVOKABLE on objects</li>
+			<li>Instantiating objects registered with qmlRegisterType</li>
+		</ul>
+	</section>
+</section>
+	<section>
+		The rest of this talk is divided into two parts:
+		<br/>
+		<br/>
+		<ul>
+		<li>Lifetime/ownership issues</li>
+		<li>API issues with ViewModels</li>
+		</ul>
+	</section>
+
+	<section>
+	<section>
+		<h2>Lifetime/Ownership</h2>
+		<pre><code data-trim>
+ListView {
+  // ...
+  delegate: Text {
+    text: model.employeeObject.name
+  }
+}
+</code></pre>
+		What is employeeObject?
+
+    <aside class="notes">
+		<li>It must be a QObject.
+		<li>What about lifetime?
+		<li>Where does its name value come from?
+		<li>We must somehow populate that the Model.
+    </aside>
+	</section>
+	<section>
+		<h2>ViewModel construction</h2>
+		<pre><code data-trim data-noescape>
+class MyModel : public QAbstractItemModel {
+  MyModel(Document const& doc) {
+    for(auto obj : doc.getObjects()) {
+      objects.push_back(
+        std::make_unique&lt;EmployeeObject&gt;(obj));
+    }
+  }
+  QVariant data(...) { return objects.at(i).get(); }
+private:
+  std::vector&lt;std::unique_ptr&lt;EmployeeObject&gt;&gt; objects;
+};</code></pre>
+	</section>
+	<section>
+	<ul>
+		<li>What happens when rows are removed?
+		<li>Do we need to create the objects eagerly?
+		<li>Can we create them lazily?
+		<li>Can we destroy them when no longer needed?
+		</ul>
+	</section>
+	<section>
+		<pre><code data-trim>
+text: employeeObject ? employeeObject.name : ""
+		</code></pre>
+    <aside class="notes">
+		<li>Gets ugly
+		<li>deleteLater still deletes too soon.
+		<li>// Or don't remove anything.
+	</aside>
+	</section>
+	<section>
+		Demo
+	</section>
+	<section>
+		<h2>Construct in QML</h2>
+	<pre><code data-trim>
+ListView {
+  model: myModel
+  delegate: Item {
+    ViewModelObject {
+      id: employee
+      someProperty: someValue
+    }
+    Text {
+      text: employee.name
+    }
+  }
+}
+</code>
+
+    <aside class="notes">
+		someValue might be
+		<li>a ViewModel object
+		<li>a QModelIndex
+		<li>a model handle
+	</aside>
+	</section>
+	<section>
+		<h2>Progress</h2>
+		<ul>
+		<li>Only visible Objects are only created</li>
+		<li>They get garbage collected automatically</li>
+		</ul>
+	</section>
+	<section>
+		<h3>What happens when the thing is removed?</h3>
+<ul>
+			<li>We have only pushed the problem down a layer.</li>
+			<li>But it is easier to implement a solution in this layer</li>
+</ul>
+	</section>
+	<section>
+		<h3>What happens when the thing is removed?</h3>
+<ul>
+			<li>Can we keep the model object alive?
+			<li>Can we just mark it as obsolete in the document?
+		</ul>
+	</section>
+	<section>
+		<h3>Solution</h3>
+
+		We need to cache the properties from the Model in the ViewModel layer.
+	</section>
+	</section>
+	<section>
+	<section>
+		<h2>ViewModel object APIs</h2>
+		</section>
+	<section>
+		<h2>ViewModel object APIs</h2>
+
+		<ul>
+		<li>Avoid adding Q_INVOKABLEs to ViewModels
+		<li>Q_INVOKABLEs should return void
+		<li>Prefer properties instead
+		<li>Figure out how to make declarative APIs
+		</ul>
+	</section>
+
+	<section>
+		<h2>Selection API</h2>
+		<pre><code data-trim>
+selectionModel.isSelected(someModelIndex);
+		</code></pre>
+		VS
+		<pre><code data-trim>
+SelectionInfo {
+  id: selectionInfo
+  selectionModel: someSelectionModel
+  index: someIndex
+}
+		</code></pre>
+
+	</section>
+
+	<section>
+
+		<pre><code data-trim>
+SelectionInfo {
+  id: selectionInfo
+  selectionModel: someSelectionModel
+  index: someIndex
+}
+
+Rectangle {
+  color: selectionInfo.isSelected ? "blue" : "red"
+  border.width: selectionInfo.isCurrent ? 3 : 0
+}
+		</code></pre>
+
+	</section>
+
+	<section>
+	Demo
+	</section>
+
+	</section>
+
+	<section>
+		<h2>Summary</h2>
+		<ul>
+		<li>'Only UI in QML' takes some design work</li>
+		<li>GC and animation affect design</li>
+		<li>Wrap imperative APIs in declarative APIs</li>
+		</ul>
+	</section>
+
+	<section>
+		<h2>Questions?</h2>
+	</section>
+
+
 			</div>
 		</div>
 
@@ -36,6 +303,9 @@
 			// More info https://github.com/hakimel/reveal.js#configuration
 			Reveal.initialize({
 				history: true,
+
+                width: 800,
+                height: 500,
 
 				// More info https://github.com/hakimel/reveal.js#dependencies
 				dependencies: [

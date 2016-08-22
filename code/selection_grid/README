@@ -1,0 +1,30 @@
+
+Instructions
+------------
+
+Download and build kitemmodels to run this:
+
+    PFX=$PWD
+
+    git clone http://anongit.kde.org/extra-cmake-modules
+    cd extra-cmake-modules
+    mkdir build && cd build
+    cmake .. -DCMAKE_INSTALL_PREFIX=$PFX/opt/kf5
+    cmake --build .
+    cmake --build . --target install
+
+    cd $PFX
+    git clone http://anongit.kde.org/kitemmodels
+    cd kitemmodels
+    mkdir build && cd build
+    cmake .. -DCMAKE_INSTALL_PREFIX=$PFX/opt/kf5
+    cmake --build .
+    cmake --build . --target install
+
+    cd $PFX
+    cd selection_grid
+    mkdir build && cd build
+    cmake .. -DCMAKE_PREFIX_PATH=$PFX/opt/kf5
+    cmake --build .
+
+    ./selection_grid
